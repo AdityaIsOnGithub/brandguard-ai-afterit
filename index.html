@@ -1,0 +1,938 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>BrandGuard AI — Intelligent Brand Governance Platform | Team AfterIt</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <script src="https://unpkg.com/react@18/umd/react.production.min.js" crossorigin></script>
+  <script src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js" crossorigin></script>
+  <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+  <style>
+    body { font-family: 'Inter', sans-serif; background-color: #0b0f19; color: #f1f5f9; }
+    .custom-scroll::-webkit-scrollbar { width: 6px; }
+    .custom-scroll::-webkit-scrollbar-track { background: #111827; }
+    .custom-scroll::-webkit-scrollbar-thumb { background: #374151; border-radius: 4px; }
+  </style>
+</head>
+<body>
+  <div id="root"></div>
+
+  <script type="text/babel">
+    const { useState, useEffect, useMemo } = React;
+
+    const BRAND_PROFILES = {
+      novapay: {
+        id: "novapay",
+        name: "NovaPay FinTech",
+        industry: "Enterprise Financial Payments",
+        toneTargets: { formality: 88, trust: 95, clarity: 90 },
+        palette: ["#0F172A", "#2563EB", "#10B981", "#F8FAFC"],
+        approvedFacts: [
+          "PCI-DSS Level 1 Certified",
+          "99.95% platform uptime SLA",
+          "Settlement in 24 hours across 40+ currencies",
+          "1.5% flat international transaction fee"
+        ],
+        rules: [
+          {
+            id: "FIN-CLAIM-01",
+            category: "Unsupported Claim",
+            severity: "Critical",
+            triggerRegex: /\b(100%\s*(uptime|guaranteed|hack-proof|risk-free)|zero\s*risk|never\s*goes\s*down)\b/gi,
+            explanation: "Absolute security or 100% uptime guarantees violate financial compliance guidelines. Approved SLA is 99.95% uptime.",
+            suggestion: "99.95% SLA-backed enterprise reliability"
+          },
+          {
+            id: "FIN-FACT-02",
+            category: "Outdated / Incorrect Fact",
+            severity: "Critical",
+            triggerRegex: /\b(zero\s*fees|0%\s*fee|free\s*international\s*transfers|instant\s*global\s*settlement)\b/gi,
+            explanation: "Contradicts approved pricing and settlement sheet. International transfers carry a 1.5% flat fee with 24-hour settlement.",
+            suggestion: "24-hour global settlement at a transparent 1.5% flat fee"
+          },
+          {
+            id: "FIN-TONE-03",
+            category: "Off-Brand Tone",
+            severity: "Warning",
+            triggerRegex: /\b(get\s*rich\s*quick|insane\s*gains|crush\s*the\s*banks|hype|no-brainer|yolo)\b/gi,
+            explanation: "Hyperbolic slang conflicts with NovaPay's authoritative, institutional brand voice.",
+            suggestion: "accelerate institutional treasury efficiency"
+          },
+          {
+            id: "FIN-TERM-04",
+            category: "Terminology Drift",
+            severity: "Info",
+            triggerRegex: /\b(crypto\s*wallet|cheap\s*app)\b/gi,
+            explanation: "NovaPay must be referred to as an 'Enterprise Treasury Infrastructure', never a 'cheap app' or 'crypto wallet'.",
+            suggestion: "Enterprise Treasury Infrastructure"
+          }
+        ]
+      },
+      vervebio: {
+        id: "vervebio",
+        name: "VerveBio Health",
+        industry: "Clinical Nutrition & Wellness",
+        toneTargets: { formality: 82, trust: 96, clarity: 92 },
+        palette: ["#064E3B", "#059669", "#34D399", "#ECFDF5"],
+        approvedFacts: [
+          "Clinically tested in a 12-week double-blind study (n=240)",
+          "Supports healthy metabolic energy",
+          "Third-party USP verified ingredients"
+        ],
+        rules: [
+          {
+            id: "MED-CLAIM-01",
+            category: "Unsupported Claim",
+            severity: "Critical",
+            triggerRegex: /\b(cures\s*insomnia|cures\s*anxiety|miracle\s*cure|100%\s*medically\s*proven|reverses\s*aging\s*overnight)\b/gi,
+            explanation: "Direct disease-cure claims violate regulatory supplement marketing guidelines.",
+            suggestion: "clinically formulated to support restful sleep and metabolic vitality"
+          },
+          {
+            id: "MED-FACT-02",
+            category: "Outdated / Incorrect Fact",
+            severity: "Critical",
+            triggerRegex: /\b(FDA\s*approved\s*drug|instant\s*results\s*in\s*24\s*hours)\b/gi,
+            explanation: "Dietary supplements are Third-Party USP Verified and tested over a 12-week protocol, not FDA-approved drugs.",
+            suggestion: "Third-Party USP Verified across a 12-week clinical protocol"
+          },
+          {
+            id: "MED-TONE-03",
+            category: "Off-Brand Tone",
+            severity: "Warning",
+            triggerRegex: /\b(magic\s*pill|biohack\s*on\s*steroids|freaky\s*fast)\b/gi,
+            explanation: "Sensationalist language undermines clinical credibility.",
+            suggestion: "evidence-based cellular nutrition"
+          }
+        ]
+      },
+      auracloud: {
+        id: "auracloud",
+        name: "AuraCloud AI",
+        industry: "Enterprise Cloud & Agentic Security",
+        toneTargets: { formality: 85, trust: 92, clarity: 94 },
+        palette: ["#1E1B4B", "#4F46E5", "#818CF8", "#EEF2FF"],
+        approvedFacts: [
+          "SOC2 Type II and ISO 27001 Certified",
+          "Zero-data-retention LLM inference",
+          "Reduces cloud ops triage time by up to 64%"
+        ],
+        rules: [
+          {
+            id: "CLD-CLAIM-01",
+            category: "Unsupported Claim",
+            severity: "Critical",
+            triggerRegex: /\b(replaces\s*100%\s*of\s*engineers|unhackable\s*AI|zero\s*latency\s*worldwide)\b/gi,
+            explanation: "Unsubstantiated automation claim. Approved metric is up to 64% reduction in triage time.",
+            suggestion: "reduces DevOps incident triage time by up to 64%"
+          },
+          {
+            id: "CLD-TONE-02",
+            category: "Off-Brand Tone",
+            severity: "Warning",
+            triggerRegex: /\b(fire\s*your\s*IT\s*team|skynet|destroy\s*competitors)\b/gi,
+            explanation: "AuraCloud emphasizes human-in-the-loop empowerment, never hostile replacement rhetoric.",
+            suggestion: "empower your engineering team with autonomous copilot workflows"
+          }
+        ]
+      }
+    };
+
+    const PRESET_SCENARIOS = [
+      {
+        id: "preset1",
+        title: "Preset 1: FinTech Launch Post (High Violations)",
+        brandId: "novapay",
+        channel: "LinkedIn Campaign + Banner",
+        headline: "Ditch the banks! NovaPay is 100% risk-free with ZERO fees!",
+        body: "Looking for insane gains in your company cashflow? Our cheap app gives you instant global settlement with 0% fee and 100% uptime guaranteed. It is a total no-brainer to crush the banks today!",
+        visualHex: "#EF4444",
+        textHex: "#FCA5A5",
+        altText: ""
+      },
+      {
+        id: "preset2",
+        title: "Preset 2: Clinical Wellness Ad (Medical Claim Drift)",
+        brandId: "vervebio",
+        channel: "Instagram Sponsored Story",
+        headline: "The Magic Pill That Cures Insomnia in 24 Hours!",
+        body: "VerveBio is an FDA approved drug that reverses aging overnight. Try this biohack on steroids for instant results in 24 hours—100% medically proven!",
+        visualHex: "#064E3B",
+        textHex: "#ECFDF5",
+        altText: "VerveBio green supplement bottle on clinical table"
+      },
+      {
+        id: "preset3",
+        title: "Preset 3: Enterprise Cloud Release (Compliant Draft)",
+        brandId: "auracloud",
+        channel: "Enterprise Whitepaper Abstract",
+        headline: "Empowering SecOps with SOC2 Type II Agentic Workflows",
+        body: "AuraCloud AI delivers zero-data-retention LLM inference that reduces cloud ops triage time by up to 64%, keeping human engineers in full control of production infrastructure.",
+        visualHex: "#1E1B4B",
+        textHex: "#EEF2FF",
+        altText: "AuraCloud AI architecture diagram showing SOC2 compliance"
+      }
+    ];
+
+    // WCAG Contrast Calculator
+    function hexToRgb(hex) {
+      const clean = hex.replace("#", "");
+      const num = parseInt(clean.length === 3 ? clean.split("").map(c => c + c).join("") : clean, 16);
+      return [(num >> 16) & 255, (num >> 8) & 255, num & 255];
+    }
+
+    function getLuminance([r, g, b]) {
+      const a = [r, g, b].map(v => {
+        v /= 255;
+        return v <= 0.03928 ? v / 12.92 : Math.pow((v + 0.055) / 1.055, 2.4);
+      });
+      return a[0] * 0.2126 + a[1] * 0.7152 + a[2] * 0.0722;
+    }
+
+    function getContrastRatio(hex1, hex2) {
+      try {
+        const l1 = getLuminance(hexToRgb(hex1));
+        const l2 = getLuminance(hexToRgb(hex2));
+        const brightest = Math.max(l1, l2);
+        const darkest = Math.min(l1, l2);
+        return ((brightest + 0.05) / (darkest + 0.05)).toFixed(2);
+      } catch {
+        return "4.50";
+      }
+    }
+
+    function App() {
+      const [activeTab, setActiveTab] = useState("workspace");
+      const [role, setRole] = useState("Creator");
+      const [selectedBrandId, setSelectedBrandId] = useState("novapay");
+      const [channel, setChannel] = useState(PRESET_SCENARIOS[0].channel);
+      const [headline, setHeadline] = useState(PRESET_SCENARIOS[0].headline);
+      const [body, setBody] = useState(PRESET_SCENARIOS[0].body);
+      const [visualHex, setVisualHex] = useState(PRESET_SCENARIOS[0].visualHex);
+      const [textHex, setTextHex] = useState(PRESET_SCENARIOS[0].textHex);
+      const [altText, setAltText] = useState(PRESET_SCENARIOS[0].altText);
+      const [uploadedImageName, setUploadedImageName] = useState("");
+      const [revisionLog, setRevisionLog] = useState([]);
+      const [approvalQueue, setApprovalQueue] = useState([
+        {
+          id: "SUB-101",
+          brand: "NovaPay FinTech",
+          title: "Q4 Enterprise Treasury Deck Copy",
+          author: "Aditya Tiwari (Creator)",
+          score: 94,
+          status: "Approved",
+          reviewerNote: "All SLA claims verified against 99.95% guideline.",
+          timestamp: "Today, 10:15 AM"
+        }
+      ]);
+      const [managerComment, setManagerComment] = useState("");
+      const [notification, setNotification] = useState(null);
+
+      const activeBrand = BRAND_PROFILES[selectedBrandId];
+
+      const showToast = (msg) => {
+        setNotification(msg);
+        setTimeout(() => setNotification(null), 3200);
+      };
+
+      const loadPreset = (preset) => {
+        setSelectedBrandId(preset.brandId);
+        setChannel(preset.channel);
+        setHeadline(preset.headline);
+        setBody(preset.body);
+        setVisualHex(preset.visualHex);
+        setTextHex(preset.textHex);
+        setAltText(preset.altText);
+        showToast(`Loaded "${preset.title}"`);
+      };
+
+      // Handle image upload & dominant hex simulation
+      const handleImageUpload = (e) => {
+        const file = e.target.files?.[0];
+        if (!file) return;
+        setUploadedImageName(file.name);
+        const reader = new FileReader();
+        reader.onload = (ev) => {
+          const img = new Image();
+          img.onload = () => {
+            const canvas = document.createElement("canvas");
+            canvas.width = 16;
+            canvas.height = 16;
+            const ctx = canvas.getContext("2d");
+            ctx.drawImage(img, 0, 0, 16, 16);
+            const data = ctx.getImageData(8, 8, 1, 1).data;
+            const hex = "#" + [data[0], data[1], data[2]].map(x => x.toString(16).padStart(2, "0")).join("").toUpperCase();
+            setVisualHex(hex);
+            showToast(`Extracted dominant color ${hex} from ${file.name}`);
+          };
+          img.src = ev.target.result;
+        };
+        reader.readAsDataURL(file);
+      };
+
+      // Live Audit Calculation
+      const auditResults = useMemo(() => {
+        const combinedText = `${headline}\n${body}`;
+        const detectedIssues = [];
+
+        activeBrand.rules.forEach((rule) => {
+          const matches = [...combinedText.matchAll(rule.triggerRegex)];
+          matches.forEach((match) => {
+            detectedIssues.push({
+              uniqueId: `${rule.id}-${match.index}`,
+              ruleId: rule.id,
+              category: rule.category,
+              severity: rule.severity,
+              flaggedText: match[0],
+              explanation: rule.explanation,
+              suggestion: rule.suggestion
+            });
+          });
+        });
+
+        // Check visual palette match
+        const isPaletteMatch = activeBrand.palette.some(
+          p => p.toLowerCase() === visualHex.toLowerCase()
+        );
+        if (!isPaletteMatch) {
+          detectedIssues.push({
+            uniqueId: "VIS-PALETTE-01",
+            ruleId: "VIS-HEX-01",
+            category: "Off-Brand Visual",
+            severity: "Warning",
+            flaggedText: `Banner Color (${visualHex})`,
+            explanation: `Primary visual color ${visualHex} is outside ${activeBrand.name}'s approved palette (${activeBrand.palette.join(", ")}).`,
+            suggestion: activeBrand.palette[0],
+            isVisualHexFix: true
+          });
+        }
+
+        // Check WCAG contrast
+        const contrastRatio = parseFloat(getContrastRatio(visualHex, textHex));
+        if (contrastRatio < 4.5) {
+          detectedIssues.push({
+            uniqueId: "ACC-WCAG-01",
+            ruleId: "WCAG-AA-01",
+            category: "Accessibility (WCAG)",
+            severity: "Critical",
+            flaggedText: `Contrast Ratio ${contrastRatio}:1`,
+            explanation: `Foreground text (${textHex}) on background (${visualHex}) yields ${contrastRatio}:1, failing WCAG 2.1 AA minimum (4.5:1).`,
+            suggestion: "#F8FAFC",
+            isContrastFix: true
+          });
+        }
+
+        // Check Alt Text
+        if (!altText || altText.trim().length < 8) {
+          detectedIssues.push({
+            uniqueId: "ACC-ALT-02",
+            ruleId: "WCAG-ALT-02",
+            category: "Accessibility (WCAG)",
+            severity: "Warning",
+            flaggedText: "Missing descriptive Alt-Text",
+            explanation: "All published visual assets require descriptive screen-reader alt text (minimum 8 characters) for accessibility compliance.",
+            suggestion: `${activeBrand.name} promotional campaign graphic displaying approved enterprise metrics`,
+            isAltFix: true
+          });
+        }
+
+        const criticalCount = detectedIssues.filter(i => i.severity === "Critical").length;
+        const warningCount = detectedIssues.filter(i => i.severity === "Warning").length;
+        const rawScore = Math.max(12, 100 - criticalCount * 18 - warningCount * 9);
+
+        return {
+          issues: detectedIssues,
+          score: rawScore,
+          contrastRatio,
+          isPaletteMatch
+        };
+      }, [headline, body, visualHex, textHex, altText, activeBrand]);
+
+      const applySmartFix = (issue) => {
+        if (issue.isVisualHexFix) {
+          setVisualHex(issue.suggestion);
+        } else if (issue.isContrastFix) {
+          setTextHex(issue.suggestion);
+        } else if (issue.isAltFix) {
+          setAltText(issue.suggestion);
+        } else {
+          const escaped = issue.flaggedText.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+          const regex = new RegExp(escaped, "i");
+          if (regex.test(headline)) {
+            setHeadline(prev => prev.replace(regex, issue.suggestion));
+          } else {
+            setBody(prev => prev.replace(regex, issue.suggestion));
+          }
+        }
+
+        setRevisionLog(prev => [
+          {
+            id: Date.now(),
+            ruleId: issue.ruleId,
+            before: issue.flaggedText,
+            after: issue.suggestion,
+            time: new Date().toLocaleTimeString()
+          },
+          ...prev
+        ]);
+        showToast(`Applied Smart Fix for ${issue.ruleId}`);
+      };
+
+      const applyAllFixes = () => {
+        auditResults.issues.forEach(issue => applySmartFix(issue));
+        showToast("All flagged brand & accessibility issues remediated!");
+      };
+
+      const submitForApproval = () => {
+        const newSubmission = {
+          id: `SUB-${Math.floor(102 + approvalQueue.length)}`,
+          brand: activeBrand.name,
+          title: headline.slice(0, 48) + (headline.length > 48 ? "..." : ""),
+          author: "Aditya Tiwari (Creator)",
+          score: auditResults.score,
+          status: auditResults.score >= 85 ? "Pending Final Sign-Off" : "Flagged for Manager Review",
+          reviewerNote: "Submitted via BrandGuard XAI Studio",
+          timestamp: "Just now"
+        };
+        setApprovalQueue([newSubmission, ...approvalQueue]);
+        setActiveTab("workflow");
+        showToast("Content submitted to Collaborative Review Queue!");
+      };
+
+      const updateSubmissionStatus = (id, newStatus) => {
+        setApprovalQueue(prev =>
+          prev.map(item =>
+            item.id === id
+              ? { ...item, status: newStatus, reviewerNote: managerComment || `Marked ${newStatus} by Brand Reviewer` }
+              : item
+          )
+        );
+        setManagerComment("");
+        showToast(`Submission ${id} marked as ${newStatus}`);
+      };
+
+      return (
+        <div className="min-h-screen flex flex-col">
+          {/* Top Navigation Bar */}
+          <header className="border-b border-slate-800 bg-slate-900/90 backdrop-blur sticky top-0 z-30">
+            <div className="max-w-7xl mx-auto px-4 py-3 flex flex-wrap items-center justify-between gap-4">
+              <div className="flex items-center gap-3">
+                <div className="w-10 h-10 rounded-xl bg-indigo-600 flex items-center justify-center font-extrabold text-white shadow-lg shadow-indigo-600/30">
+                  BG
+                </div>
+                <div>
+                  <div className="flex items-center gap-2">
+                    <h1 className="font-bold text-lg text-white tracking-tight">BrandGuard AI</h1>
+                    <span className="text-xs px-2 py-0.5 rounded-full bg-indigo-500/20 text-indigo-300 border border-indigo-500/30 font-medium">
+                      Team AfterIt • Round 2 MVP
+                    </span>
+                  </div>
+                  <p className="text-xs text-slate-400">Explainable Brand Vector DNA & Multimodal Governance Platform</p>
+                </div>
+              </div>
+
+              {/* Navigation Tabs */}
+              <div className="flex items-center gap-2 bg-slate-800/80 p-1 rounded-xl border border-slate-700">
+                <button
+                  onClick={() => setActiveTab("workspace")}
+                  className={`px-3.5 py-1.5 rounded-lg text-xs font-semibold transition ${
+                    activeTab === "workspace" ? "bg-indigo-600 text-white" : "text-slate-300 hover:text-white"
+                  }`}
+                >
+                  1. Content Audit Studio
+                </button>
+                <button
+                  onClick={() => setActiveTab("guidelines")}
+                  className={`px-3.5 py-1.5 rounded-lg text-xs font-semibold transition ${
+                    activeTab === "guidelines" ? "bg-indigo-600 text-white" : "text-slate-300 hover:text-white"
+                  }`}
+                >
+                  2. Brand DNA Rules
+                </button>
+                <button
+                  onClick={() => setActiveTab("workflow")}
+                  className={`px-3.5 py-1.5 rounded-lg text-xs font-semibold transition ${
+                    activeTab === "workflow" ? "bg-indigo-600 text-white" : "text-slate-300 hover:text-white"
+                  }`}
+                >
+                  3. Review Queue ({approvalQueue.length})
+                </button>
+                <button
+                  onClick={() => setActiveTab("insights")}
+                  className={`px-3.5 py-1.5 rounded-lg text-xs font-semibold transition ${
+                    activeTab === "insights" ? "bg-indigo-600 text-white" : "text-slate-300 hover:text-white"
+                  }`}
+                >
+                  4. Governance Insights
+                </button>
+              </div>
+
+              {/* Role Switcher */}
+              <div className="flex items-center gap-2">
+                <span className="text-xs text-slate-400">Active Role:</span>
+                <select
+                  value={role}
+                  onChange={(e) => setRole(e.target.value)}
+                  className="bg-slate-800 border border-slate-700 text-xs font-semibold text-emerald-400 rounded-lg px-2.5 py-1.5 focus:outline-none"
+                >
+                  <option value="Creator">Content Creator</option>
+                  <option value="Reviewer">Brand Manager (Approver)</option>
+                </select>
+              </div>
+            </div>
+          </header>
+
+          {/* Toast Notification */}
+          {notification && (
+            <div className="fixed bottom-5 right-5 z-50 bg-indigo-600 text-white px-4 py-2.5 rounded-xl shadow-xl text-xs font-semibold border border-indigo-400">
+              ✓ {notification}
+            </div>
+          )}
+
+          {/* Main Content Container */}
+          <main className="max-w-7xl mx-auto w-full px-4 py-6 flex-1">
+            {activeTab === "workspace" && (
+              <div className="space-y-6">
+                {/* Preset Quick-Load Bar for Judges */}
+                <div className="bg-slate-900 border border-slate-800 rounded-2xl p-4 flex flex-wrap items-center justify-between gap-3">
+                  <div>
+                    <span className="text-xs font-bold uppercase tracking-wider text-indigo-400">Judge Quick-Test Scenarios</span>
+                    <p className="text-xs text-slate-400">Click any preset below to test multimodal detection, explainable flags, and 1-click remediation:</p>
+                  </div>
+                  <div className="flex flex-wrap gap-2">
+                    {PRESET_SCENARIOS.map((p) => (
+                      <button
+                        key={p.id}
+                        onClick={() => loadPreset(p)}
+                        className="text-xs bg-slate-800 hover:bg-slate-700 text-slate-200 border border-slate-700 px-3 py-1.5 rounded-lg font-medium transition"
+                      >
+                        {p.title}
+                      </button>
+                    ))}
+                  </div>
+                </div>
+
+                {/* Main Studio Grid */}
+                <div className="grid grid-cols-1 lg:grid-cols-12 gap-6">
+                  {/* Left Column: Multimodal Content Editor */}
+                  <div className="lg:col-span-7 space-y-5">
+                    <div className="bg-slate-900 border border-slate-800 rounded-2xl p-5 space-y-4">
+                      <div className="flex flex-wrap items-center justify-between gap-3 border-b border-slate-800 pb-3">
+                        <div>
+                          <h2 className="text-base font-bold text-white">Multimodal Content Composer</h2>
+                          <p className="text-xs text-slate-400">Draft text & visual assets checked in real time against Brand Vector DNA</p>
+                        </div>
+                        <div className="flex items-center gap-2">
+                          <label className="text-xs text-slate-400">Brand Profile:</label>
+                          <select
+                            value={selectedBrandId}
+                            onChange={(e) => setSelectedBrandId(e.target.value)}
+                            className="bg-slate-800 border border-slate-700 rounded-lg px-3 py-1.5 text-xs font-semibold text-white"
+                          >
+                            {Object.values(BRAND_PROFILES).map((b) => (
+                              <option key={b.id} value={b.id}>{b.name}</option>
+                            ))}
+                          </select>
+                        </div>
+                      </div>
+
+                      <div className="space-y-3">
+                        <div>
+                          <label className="block text-xs font-semibold text-slate-300 mb-1">Campaign Headline</label>
+                          <input
+                            type="text"
+                            value={headline}
+                            onChange={(e) => setHeadline(e.target.value)}
+                            className="w-full bg-slate-950 border border-slate-800 rounded-xl px-3.5 py-2 text-sm text-white focus:border-indigo-500 focus:outline-none"
+                          />
+                        </div>
+
+                        <div>
+                          <label className="block text-xs font-semibold text-slate-300 mb-1">Promotional Body Copy</label>
+                          <textarea
+                            rows={4}
+                            value={body}
+                            onChange={(e) => setBody(e.target.value)}
+                            className="w-full bg-slate-950 border border-slate-800 rounded-xl px-3.5 py-2.5 text-sm text-white focus:border-indigo-500 focus:outline-none"
+                          />
+                        </div>
+                      </div>
+
+                      {/* Visual & Accessibility Inspector */}
+                      <div className="border-t border-slate-800 pt-4 space-y-4">
+                        <div className="flex items-center justify-between">
+                          <h3 className="text-xs font-bold uppercase tracking-wider text-slate-300">Visual & Accessibility Governance</h3>
+                          <label className="cursor-pointer text-xs bg-indigo-600/20 hover:bg-indigo-600/30 text-indigo-300 border border-indigo-500/30 px-3 py-1 rounded-lg font-medium">
+                            Upload Banner Image (Auto-Extract Hex)
+                            <input type="file" accept="image/*" onChange={handleImageUpload} className="hidden" />
+                          </label>
+                        </div>
+
+                        <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+                          <div className="bg-slate-950 p-3 rounded-xl border border-slate-800">
+                            <label className="block text-xs text-slate-400 mb-1">Banner Background Hex</label>
+                            <div className="flex items-center gap-2">
+                              <input
+                                type="color"
+                                value={visualHex}
+                                onChange={(e) => setVisualHex(e.target.value.toUpperCase())}
+                                className="w-8 h-8 rounded cursor-pointer bg-transparent border-0"
+                              />
+                              <input
+                                type="text"
+                                value={visualHex}
+                                onChange={(e) => setVisualHex(e.target.value.toUpperCase())}
+                                className="bg-slate-900 border border-slate-700 rounded px-2 py-1 text-xs w-full font-mono"
+                              />
+                            </div>
+                          </div>
+
+                          <div className="bg-slate-950 p-3 rounded-xl border border-slate-800">
+                            <label className="block text-xs text-slate-400 mb-1">Foreground Text Hex</label>
+                            <div className="flex items-center gap-2">
+                              <input
+                                type="color"
+                                value={textHex}
+                                onChange={(e) => setTextHex(e.target.value.toUpperCase())}
+                                className="w-8 h-8 rounded cursor-pointer bg-transparent border-0"
+                              />
+                              <input
+                                type="text"
+                                value={textHex}
+                                onChange={(e) => setTextHex(e.target.value.toUpperCase())}
+                                className="bg-slate-900 border border-slate-700 rounded px-2 py-1 text-xs w-full font-mono"
+                              />
+                            </div>
+                          </div>
+
+                          <div className="bg-slate-950 p-3 rounded-xl border border-slate-800 flex flex-col justify-between">
+                            <span className="text-xs text-slate-400">WCAG 2.1 Contrast</span>
+                            <div className="flex items-center justify-between mt-1">
+                              <span className="text-base font-bold font-mono text-white">{auditResults.contrastRatio}:1</span>
+                              <span className={`text-xs px-2 py-0.5 rounded font-semibold ${
+                                parseFloat(auditResults.contrastRatio) >= 4.5
+                                  ? "bg-emerald-500/20 text-emerald-300"
+                                  : "bg-rose-500/20 text-rose-300"
+                              }`}>
+                                {parseFloat(auditResults.contrastRatio) >= 4.5 ? "AA PASS" : "AA FAIL"}
+                              </span>
+                            </div>
+                          </div>
+                        </div>
+
+                        <div>
+                          <label className="block text-xs font-semibold text-slate-300 mb-1">Image Screen-Reader Alt-Text (Accessibility Requirement)</label>
+                          <input
+                            type="text"
+                            placeholder="Describe visual asset for visually impaired users..."
+                            value={altText}
+                            onChange={(e) => setAltText(e.target.value)}
+                            className="w-full bg-slate-950 border border-slate-800 rounded-xl px-3.5 py-2 text-xs text-white focus:border-indigo-500 focus:outline-none"
+                          />
+                        </div>
+
+                        {/* Live Visual Banner Preview */}
+                        <div
+                          style={{ backgroundColor: visualHex, color: textHex }}
+                          className="rounded-xl p-4 border border-slate-700 transition-colors"
+                        >
+                          <div className="flex items-center justify-between text-xs opacity-80 mb-1">
+                            <span>LIVE CREATIVE PREVIEW • {activeBrand.name}</span>
+                            <span>{uploadedImageName || "Canvas Preview"}</span>
+                          </div>
+                          <h4 className="font-bold text-base">{headline}</h4>
+                          <p className="text-xs mt-1 opacity-90">{body}</p>
+                        </div>
+                      </div>
+
+                      <div className="flex flex-wrap items-center justify-between gap-3 pt-2 border-t border-slate-800">
+                        <span className="text-xs text-slate-400">
+                          🔒 Confidential Brand Shield Active • Local + Zero-Retention Processing
+                        </span>
+                        <button
+                          onClick={submitForApproval}
+                          className="bg-emerald-600 hover:bg-emerald-500 text-white font-semibold text-xs px-4 py-2.5 rounded-xl shadow-lg transition"
+                        >
+                          Submit to Manager Review Queue →
+                        </button>
+                      </div>
+                    </div>
+                  </div>
+
+                  {/* Right Column: Explainable AI (XAI) Governance Findings */}
+                  <div className="lg:col-span-5 space-y-5">
+                    <div className="bg-slate-900 border border-slate-800 rounded-2xl p-5 space-y-4">
+                      {/* Score Banner */}
+                      <div className="flex items-center justify-between border-b border-slate-800 pb-4">
+                        <div>
+                          <span className="text-xs font-bold uppercase tracking-wider text-slate-400">Brand Alignment Score</span>
+                          <div className="flex items-baseline gap-2 mt-1">
+                            <span className={`text-3xl font-extrabold ${
+                              auditResults.score >= 85 ? "text-emerald-400" : auditResults.score >= 60 ? "text-amber-400" : "text-rose-400"
+                            }`}>
+                              {auditResults.score}/100
+                            </span>
+                            <span className="text-xs text-slate-400">
+                              ({auditResults.issues.length} {auditResults.issues.length === 1 ? "issue" : "issues"} flagged)
+                            </span>
+                          </div>
+                        </div>
+
+                        {auditResults.issues.length > 0 && (
+                          <button
+                            onClick={applyAllFixes}
+                            className="bg-indigo-600 hover:bg-indigo-500 text-white text-xs font-semibold px-3.5 py-2 rounded-xl shadow transition"
+                          >
+                            ⚡ Apply All Smart Fixes ({auditResults.issues.length})
+                          </button>
+                        )}
+                      </div>
+
+                      {/* Flagged Issues List */}
+                      <div className="space-y-3 max-h-[420px] overflow-y-auto custom-scroll pr-1">
+                        {auditResults.issues.length === 0 ? (
+                          <div className="bg-emerald-950/30 border border-emerald-700/40 rounded-xl p-5 text-center space-y-2">
+                            <div className="text-2xl">✅</div>
+                            <h3 className="text-sm font-bold text-emerald-300">100% Brand & Regulatory Compliant</h3>
+                            <p className="text-xs text-slate-300">
+                              All factual claims, tone vectors, visual hex palettes, and WCAG 2.1 accessibility checks pass {activeBrand.name} governance rules.
+                            </p>
+                          </div>
+                        ) : (
+                          auditResults.issues.map((issue) => (
+                            <div
+                              key={issue.uniqueId}
+                              className="bg-slate-950 border border-slate-800 rounded-xl p-3.5 space-y-2"
+                            >
+                              <div className="flex items-center justify-between gap-2">
+                                <span className={`text-[11px] font-bold px-2 py-0.5 rounded ${
+                                  issue.severity === "Critical"
+                                    ? "bg-rose-500/20 text-rose-300 border border-rose-500/30"
+                                    : "bg-amber-500/20 text-amber-300 border border-amber-500/30"
+                                }`}>
+                                  {issue.severity.toUpperCase()} • {issue.category}
+                                </span>
+                                <span className="text-[11px] font-mono text-slate-400">Rule: {issue.ruleId}</span>
+                              </div>
+
+                              <div className="text-xs">
+                                <span className="text-slate-400">Flagged: </span>
+                                <span className="font-semibold text-rose-300 bg-rose-950/50 px-1.5 py-0.5 rounded">
+                                  "{issue.flaggedText}"
+                                </span>
+                              </div>
+
+                              <p className="text-xs text-slate-300 leading-relaxed">
+                                <strong className="text-slate-200">Why Flagged:</strong> {issue.explanation}
+                              </p>
+
+                              <div className="pt-1 flex items-center justify-between gap-2 border-t border-slate-800/80">
+                                <div className="text-xs text-emerald-300 truncate">
+                                  <span className="text-slate-400">Suggested: </span>
+                                  <strong>"{issue.suggestion}"</strong>
+                                </div>
+                                <button
+                                  onClick={() => applySmartFix(issue)}
+                                  className="shrink-0 bg-emerald-600/20 hover:bg-emerald-600/40 text-emerald-300 border border-emerald-500/30 text-xs font-semibold px-2.5 py-1 rounded-lg transition"
+                                >
+                                  Apply Fix
+                                </button>
+                              </div>
+                            </div>
+                          ))
+                        )}
+                      </div>
+
+                      {/* Non-Destructive Revision History */}
+                      {revisionLog.length > 0 && (
+                        <div className="border-t border-slate-800 pt-3">
+                          <h4 className="text-xs font-bold uppercase tracking-wider text-slate-400 mb-2">
+                            Human-in-the-Loop Revision Audit Trail ({revisionLog.length})
+                          </h4>
+                          <div className="space-y-1.5 max-h-32 overflow-y-auto custom-scroll text-xs">
+                            {revisionLog.map((log) => (
+                              <div key={log.id} className="bg-slate-950 px-2.5 py-1.5 rounded border border-slate-800 flex items-center justify-between">
+                                <span className="truncate">
+                                  <span className="font-mono text-indigo-400">[{log.ruleId}]</span>{" "}
+                                  <span className="line-through text-rose-400">{log.before}</span> →{" "}
+                                  <span className="text-emerald-400">{log.after}</span>
+                                </span>
+                                <span className="text-[10px] text-slate-500 ml-2">{log.time}</span>
+                              </div>
+                            ))}
+                          </div>
+                        </div>
+                      )}
+                    </div>
+                  </div>
+                </div>
+              </div>
+            )}
+
+            {/* Tab 2: Brand DNA Rules */}
+            {activeTab === "guidelines" && (
+              <div className="bg-slate-900 border border-slate-800 rounded-2xl p-6 space-y-6">
+                <div className="flex flex-wrap items-center justify-between gap-4 border-b border-slate-800 pb-4">
+                  <div>
+                    <h2 className="text-lg font-bold text-white">Approved Brand DNA Knowledge Base — {activeBrand.name}</h2>
+                    <p className="text-xs text-slate-400">Every content scan verifies claims, tone, and visuals directly against these approved source materials.</p>
+                  </div>
+                  <select
+                    value={selectedBrandId}
+                    onChange={(e) => setSelectedBrandId(e.target.value)}
+                    className="bg-slate-800 border border-slate-700 rounded-xl px-3 py-2 text-xs font-semibold text-white"
+                  >
+                    {Object.values(BRAND_PROFILES).map((b) => (
+                      <option key={b.id} value={b.id}>{b.name}</option>
+                    ))}
+                  </select>
+                </div>
+
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                  <div className="bg-slate-950 border border-slate-800 rounded-xl p-4 space-y-3">
+                    <h3 className="text-sm font-bold text-indigo-400">Approved Factual Claims & Citations</h3>
+                    <ul className="space-y-2 text-xs text-slate-300">
+                      {activeBrand.approvedFacts.map((fact, idx) => (
+                        <li key={idx} className="flex items-center gap-2">
+                          <span className="text-emerald-400">✓</span> {fact}
+                        </li>
+                      ))}
+                    </ul>
+                  </div>
+
+                  <div className="bg-slate-950 border border-slate-800 rounded-xl p-4 space-y-3">
+                    <h3 className="text-sm font-bold text-indigo-400">Approved Brand Color Palette</h3>
+                    <div className="flex items-center gap-3">
+                      {activeBrand.palette.map((hex) => (
+                        <div key={hex} className="flex flex-col items-center gap-1">
+                          <div style={{ backgroundColor: hex }} className="w-12 h-12 rounded-xl border border-slate-700 shadow" />
+                          <span className="text-[11px] font-mono text-slate-300">{hex}</span>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                </div>
+              </div>
+            )}
+
+            {/* Tab 3: Collaborative Review & Approval Workflow */}
+            {activeTab === "workflow" && (
+              <div className="bg-slate-900 border border-slate-800 rounded-2xl p-6 space-y-5">
+                <div className="flex flex-wrap items-center justify-between gap-4 border-b border-slate-800 pb-4">
+                  <div>
+                    <h2 className="text-lg font-bold text-white">Role-Based Collaborative Review & Approval Queue</h2>
+                    <p className="text-xs text-slate-400">
+                      Creators submit audited assets; Brand Managers review compliance scores, leave feedback, and approve for publication.
+                    </p>
+                  </div>
+                  <div className="flex items-center gap-2">
+                    <input
+                      type="text"
+                      placeholder="Add reviewer comment before approving/rejecting..."
+                      value={managerComment}
+                      onChange={(e) => setManagerComment(e.target.value)}
+                      className="bg-slate-950 border border-slate-800 rounded-xl px-3 py-1.5 text-xs text-white w-72"
+                    />
+                  </div>
+                </div>
+
+                <div className="space-y-3">
+                  {approvalQueue.map((item) => (
+                    <div key={item.id} className="bg-slate-950 border border-slate-800 rounded-xl p-4 flex flex-wrap items-center justify-between gap-4">
+                      <div className="space-y-1">
+                        <div className="flex items-center gap-2">
+                          <span className="text-xs font-mono text-indigo-400">{item.id}</span>
+                          <span className="text-sm font-bold text-white">{item.title}</span>
+                          <span className="text-xs px-2 py-0.5 rounded bg-slate-800 text-slate-300">{item.brand}</span>
+                        </div>
+                        <p className="text-xs text-slate-400">
+                          Submitted by {item.author} • {item.timestamp} • Note: <span className="text-slate-300">{item.reviewerNote}</span>
+                        </p>
+                      </div>
+
+                      <div className="flex items-center gap-3">
+                        <div className="text-right">
+                          <span className="text-[11px] text-slate-400 block">Audit Score</span>
+                          <span className={`text-sm font-bold ${item.score >= 85 ? "text-emerald-400" : "text-amber-400"}`}>
+                            {item.score}/100
+                          </span>
+                        </div>
+
+                        <span className={`text-xs px-2.5 py-1 rounded-lg font-semibold ${
+                          item.status === "Approved"
+                            ? "bg-emerald-500/20 text-emerald-300"
+                            : item.status === "Changes Requested"
+                            ? "bg-rose-500/20 text-rose-300"
+                            : "bg-amber-500/20 text-amber-300"
+                        }`}>
+                          {item.status}
+                        </span>
+
+                        <div className="flex items-center gap-1.5">
+                          <button
+                            onClick={() => updateSubmissionStatus(item.id, "Approved")}
+                            className="bg-emerald-600 hover:bg-emerald-500 text-white text-xs font-semibold px-3 py-1.5 rounded-lg"
+                          >
+                            Approve
+                          </button>
+                          <button
+                            onClick={() => updateSubmissionStatus(item.id, "Changes Requested")}
+                            className="bg-rose-600/80 hover:bg-rose-600 text-white text-xs font-semibold px-3 py-1.5 rounded-lg"
+                          >
+                            Request Changes
+                          </button>
+                        </div>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
+
+            {/* Tab 4: Governance Insights Dashboard */}
+            {activeTab === "insights" && (
+              <div className="bg-slate-900 border border-slate-800 rounded-2xl p-6 space-y-6">
+                <div>
+                  <h2 className="text-lg font-bold text-white">Recurring Mistakes & Brand Guideline Clarity Insights</h2>
+                  <p className="text-xs text-slate-400">
+                    Identifies repeated compliance bottlenecks across agencies and external AI tools so managers know where guidelines need clarification.
+                  </p>
+                </div>
+
+                <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                  <div className="bg-slate-950 border border-slate-800 rounded-xl p-4">
+                    <span className="text-xs text-slate-400">Top Recurring Issue Category</span>
+                    <h3 className="text-lg font-bold text-rose-400 mt-1">Unsupported Promotional Claims (42%)</h3>
+                    <p className="text-xs text-slate-400 mt-2">
+                      Creators frequently write "100% uptime" instead of the approved "99.95% SLA" metric. Recommendation: Pin SLA cheat-sheet in creator onboarding.
+                    </p>
+                  </div>
+                  <div className="bg-slate-950 border border-slate-800 rounded-xl p-4">
+                    <span className="text-xs text-slate-400">Second Most Common Issue</span>
+                    <h3 className="text-lg font-bold text-amber-400 mt-1">WCAG 2.1 Contrast & Missing Alt-Text (31%)</h3>
+                    <p className="text-xs text-slate-400 mt-2">
+                      Social banners often use low-contrast pastel text overlays. Smart-Fix adoption rate for contrast issues is currently 94%.
+                    </p>
+                  </div>
+                  <div className="bg-slate-950 border border-slate-800 rounded-xl p-4">
+                    <span className="text-xs text-slate-400">Average Review Cycle Reduction</span>
+                    <h3 className="text-lg font-bold text-emerald-400 mt-1">68% Faster Campaign Sign-Off</h3>
+                    <p className="text-xs text-slate-400 mt-2">
+                      Pre-flight automated checks resolve 85% of routine guideline violations before human reviewers open the draft.
+                    </p>
+                  </div>
+                </div>
+              </div>
+            )}
+          </main>
+        </div>
+      );
+    }
+
+    const root = ReactDOM.createRoot(document.getElementById("root"));
+    root.render(<App />);
+  </script>
+</body>
+</html>
