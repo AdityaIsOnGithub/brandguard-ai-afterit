@@ -2,7 +2,7 @@
 
 > **Team Name:** AfterIt[cite: 10]  
 > **Participant:** Aditya Tiwari (Solo Developer)[cite: 10]  
-> **Challenge:** Inkloom AI Intelligent Brand-Governance Platform[cite: 10]  
+> **Challenge:** Hackathon (CodeAxis & Techcircuit) Brand-Governance Platform[cite: 10]  
 > **Live Demo:** [https://adityaisongithub.github.io/brandguard-ai-afterit/](https://adityaisongithub.github.io/brandguard-ai-afterit/)[cite: 10]
 
 ---
