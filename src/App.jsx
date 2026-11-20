@@ -16,7 +16,10 @@ import {
   FileText,
   Sparkles,
   Eye,
-  Edit3
+  Edit3,
+  Upload,
+  Printer,
+  Paperclip
 } from 'lucide-react';
 
 const BRAND_PRESETS = {
@@ -151,37 +154,41 @@ function getGeminiApiKey() {
   }
 }
 
-async function fetchWithBackoff(url, options, maxRetries = 3) {
+async function fetchWithBackoff(url, options, maxRetries = 3, timeoutMs = 45000) {
   let delay = 1000;
   for (let attempt = 0; attempt < maxRetries; attempt++) {
+    const controller = new AbortController();
+    const timer = setTimeout(() => controller.abort(), timeoutMs);
     try {
-      const response = await fetch(url, options);
+      const response = await fetch(url, { ...options, signal: controller.signal });
+      clearTimeout(timer);
       if (response.ok) return response;
       if ((response.status === 429 || response.status >= 500) && attempt < maxRetries - 1) {
         await new Promise((resolve) => setTimeout(resolve, delay));
         delay *= 2;
         continue;
       }
-      throw new Error(`HTTP ${response.status}`);
+      const errBody = await response.text();
+      throw new Error(`HTTP ${response.status}: ${errBody}`);
     } catch (err) {
+      clearTimeout(timer);
       if (attempt === maxRetries - 1) throw err;
       await new Promise((resolve) => setTimeout(resolve, delay));
       delay *= 2;
     }
   }
-  throw new Error('Request failed');
 }
-
-async function runGeminiAudit({ copy, guidelines }) {
+async function runGeminiAudit({ copy, guidelines, pdfAttachment }) {
   const apiKey = getGeminiApiKey();
+  if (!apiKey) throw new Error('Missing Gemini API key');
   const apiUrl = `https://generativelanguage.googleapis.com/v1beta/models/gemini-3-flash-preview:generateContent?key=${apiKey}`;
 
   const systemPrompt = `You are BrandGuard AI, an enterprise compliance officer and senior brand editor.
-Audit the marketing copy strictly against the provided Brand Guidelines.
+Audit the provided marketing copy and/or attached PDF document (including all text, tables, claims, and disclaimers) strictly against the provided Brand Guidelines.
 Return structured JSON with:
 - overallScore (0-100), toneScore (0-100), legalScore (0-100)
 - summary: concise 1-2 sentence executive assessment
-- violations: list of every issue with verbatim phrase from the copy (or "[Missing Disclaimer]" if a required disclaimer is absent), severity ("HIGH", "MEDIUM", or "LOW"), category, and clear reason.
+- violations: list of every issue with verbatim phrase from the copy or PDF (or "[Missing Disclaimer]" if a required disclaimer is absent), severity ("HIGH", "MEDIUM", or "LOW"), category, and clear reason.
 - compliantRewrite: publication-ready rewrite preserving the core offer, matching the target voice, removing all violations, and including all required disclaimers verbatim.`;
 
   const userPrompt = `BRAND GUIDELINES:
@@ -190,13 +197,21 @@ Return structured JSON with:
 - Banned Phrases: ${guidelines.bannedPhrases.length ? guidelines.bannedPhrases.join(', ') : 'None'}
 - Required Disclaimers: ${guidelines.requiredDisclaimers.length ? guidelines.requiredDisclaimers.join(' | ') : 'None'}
 
-COPY TO AUDIT:
-"""
-${copy}
-"""`;
+${pdfAttachment ? `ATTACHED PDF DOCUMENT: "${pdfAttachment.name}" (audit all pages, tables, claims, and disclosures inside this PDF).` : ''}
+${copy ? `ADDITIONAL COPY TO AUDIT:\n"""\n${copy}\n"""` : 'No additional text copy provided; audit the attached PDF document.'}`;
+
+  const parts = [{ text: userPrompt }];
+  if (pdfAttachment?.base64) {
+    parts.push({
+      inlineData: {
+        mimeType: 'application/pdf',
+        data: pdfAttachment.base64
+      }
+    });
+  }
 
   const payload = {
-    contents: [{ parts: [{ text: userPrompt }] }],
+    contents: [{ parts }],
     systemInstruction: { parts: [{ text: systemPrompt }] },
     generationConfig: {
       responseMimeType: 'application/json',
@@ -228,7 +243,7 @@ ${copy}
     legalScore: clamp(parsed.legalScore),
     summary: parsed.summary || 'Compliance audit completed.',
     violations: Array.isArray(parsed.violations) ? parsed.violations : [],
-    compliantRewrite: parsed.compliantRewrite || copy,
+    compliantRewrite: parsed.compliantRewrite || copy || 'No rewrite generated.',
     engine: 'gemini'
   };
 }
@@ -237,7 +252,43 @@ function escapeRegExp(str) {
   return str.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
 }
 
-function runLocalRuleAudit({ copy, guidelines }) {
+function formatFileSize(bytes) {
+  if (!bytes) return '0 B';
+  if (bytes < 1024) return `${bytes} B`;
+  if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(1)} KB`;
+  return `${(bytes / (1024 * 1024)).toFixed(2)} MB`;
+}
+
+function escapeHtml(str) {
+  return String(str || '')
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;');
+}
+
+function runLocalRuleAudit({ copy, guidelines, pdfAttachment }) {
+  if (!copy && pdfAttachment) {
+    return {
+      overallScore: 0,
+      toneScore: 0,
+      legalScore: 0,
+      summary: `Attached PDF "${pdfAttachment.name}" requires the live Gemini Flash API for native PDF parsing. Add VITE_GEMINI_API_KEY in .env or paste text into the editor to run the local rule engine.`,
+      violations: [
+        {
+          phrase: `[PDF: ${pdfAttachment.name}]`,
+          severity: 'MEDIUM',
+          category: 'Live API Required',
+          reason:
+            'Local Rule Engine cannot parse binary PDF documents natively. Connect a valid Gemini API key to audit PDFs directly.'
+        }
+      ],
+      compliantRewrite:
+        'Connect your Gemini API key (VITE_GEMINI_API_KEY) to generate a compliant rewrite directly from the uploaded PDF.',
+      engine: 'local'
+    };
+  }
+
   const violations = [];
   let legalPenalty = 0;
   let tonePenalty = 0;
@@ -360,11 +411,15 @@ function runLocalRuleAudit({ copy, guidelines }) {
       ? `Draft meets all ${guidelines.presetLabel} compliance policies and aligns with the "${guidelines.voice}" voice.`
       : `Identified ${violations.length} compliance ${violations.length === 1 ? 'issue' : 'issues'} (${highCount} high-risk) affecting ${guidelines.presetLabel} policy adherence.`;
 
+  const finalSummary = pdfAttachment
+    ? `${summary} (Note: Attached PDF "${pdfAttachment.name}" was skipped in local fallback mode; live Gemini API is required for native PDF parsing.)`
+    : summary;
+
   return {
     overallScore,
     toneScore,
     legalScore,
-    summary,
+    summary: finalSummary,
     violations,
     compliantRewrite: rewritten,
     engine: 'local'
@@ -450,6 +505,8 @@ export default function App() {
 
   const [draftCopy, setDraftCopy] = useState(BRAND_PRESETS.fintech.highRiskDraft);
   const [editorMode, setEditorMode] = useState('split'); // 'split' | 'edit' | 'highlight'
+  const [pdfAttachment, setPdfAttachment] = useState(null);
+  const [isDraggingPdf, setIsDraggingPdf] = useState(false);
 
   const [isAuditing, setIsAuditing] = useState(false);
   const [engineMode, setEngineMode] = useState('local');
@@ -460,6 +517,7 @@ export default function App() {
   const [copiedRewrite, setCopiedRewrite] = useState(false);
   const [toastMessage, setToastMessage] = useState(null);
   const violationRefs = useRef([]);
+  const fileInputRef = useRef(null);
 
   const activePreset = BRAND_PRESETS[activePresetId];
 
@@ -510,10 +568,49 @@ export default function App() {
     setNewDisclaimerInput('');
   };
 
+  const handlePdfFile = useCallback(
+    (file) => {
+      if (!file) return;
+      const isPdf =
+        file.type === 'application/pdf' || file.name.toLowerCase().endsWith('.pdf');
+      if (!isPdf) {
+        triggerToast('Only .pdf files are supported for document auditing.');
+        return;
+      }
+      if (file.size > 20 * 1024 * 1024) {
+        triggerToast('PDF exceeds the 20 MB size limit.');
+        return;
+      }
+
+      const reader = new FileReader();
+      reader.onload = () => {
+        const resultStr = String(reader.result || '');
+        const base64 = resultStr.includes(',') ? resultStr.split(',')[1] : resultStr;
+        setPdfAttachment({
+          name: file.name,
+          size: file.size,
+          base64
+        });
+        triggerToast(`Attached ${file.name} for compliance audit`);
+      };
+      reader.onerror = () => {
+        triggerToast('Could not read the selected PDF file.');
+      };
+      reader.readAsDataURL(file);
+    },
+    [triggerToast]
+  );
+
+  const handleRemovePdf = () => {
+    setPdfAttachment(null);
+    if (fileInputRef.current) fileInputRef.current.value = '';
+    triggerToast('Removed PDF attachment');
+  };
+
   const handleRunAudit = useCallback(async () => {
     const trimmed = draftCopy.trim();
-    if (!trimmed) {
-      triggerToast('Enter marketing copy before running an audit.');
+    if (!trimmed && !pdfAttachment) {
+      triggerToast('Enter marketing copy or attach a PDF before running an audit.');
       return;
     }
 
@@ -530,17 +627,19 @@ export default function App() {
 
     let output;
     try {
-      output = await runGeminiAudit({ copy: trimmed, guidelines });
+      output = await runGeminiAudit({ copy: trimmed, guidelines, pdfAttachment });
       setEngineMode('gemini');
     } catch {
-      output = runLocalRuleAudit({ copy: trimmed, guidelines });
+      output = runLocalRuleAudit({ copy: trimmed, guidelines, pdfAttachment });
       setEngineMode('local');
     }
 
     const record = {
       id: `audit-${Date.now()}`,
       timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
+      fullDate: new Date().toLocaleString(),
       presetLabel: activePreset.shortLabel,
+      pdfName: pdfAttachment?.name || null,
       originalCopy: trimmed,
       guidelinesSnapshot: guidelines,
       ...output
@@ -549,7 +648,16 @@ export default function App() {
     setCurrentAudit(record);
     setAuditHistory((prev) => [record, ...prev].slice(0, 8));
     setIsAuditing(false);
-  }, [draftCopy, activePresetId, activePreset, brandVoice, bannedPhrases, requiredDisclaimers, triggerToast]);
+  }, [
+    draftCopy,
+    pdfAttachment,
+    activePresetId,
+    activePreset,
+    brandVoice,
+    bannedPhrases,
+    requiredDisclaimers,
+    triggerToast
+  ]);
 
   useEffect(() => {
     handleRunAudit();
@@ -635,6 +743,112 @@ ${currentAudit.compliantRewrite}
     document.body.removeChild(link);
     URL.revokeObjectURL(url);
     triggerToast('Downloaded compliance report (.md)');
+  };
+
+  const handleExportPdf = () => {
+    if (!currentAudit) return;
+    const status = getScoreStatus(currentAudit.overallScore, currentAudit.violations);
+    const sourceLabel = currentAudit.pdfName
+      ? `PDF: ${currentAudit.pdfName}${currentAudit.originalCopy ? ' + Editor Copy' : ''}`
+      : 'Editor Draft Copy';
+
+    const violationsRows =
+      currentAudit.violations.length === 0
+        ? `<tr><td colspan="4" style="padding:14px;text-align:center;color:#166534;background:#F0FDF4;">No compliance violations detected. Copy is ready for publication.</td></tr>`
+        : currentAudit.violations
+            .map((v, i) => {
+              const sevColor =
+                v.severity === 'HIGH'
+                  ? 'background:#FEF2F2;color:#991B1B;border:1px solid #FECACA;'
+                  : v.severity === 'MEDIUM'
+                  ? 'background:#FFFBEB;color:#92400E;border:1px solid #FDE68A;'
+                  : 'background:#F1F5F9;color:#475569;border:1px solid #E2E8F0;';
+              return `
+                <tr>
+                  <td style="padding:10px 12px;border-bottom:1px solid #E2E8F0;font-family:monospace;font-size:12px;">${i + 1}</td>
+                  <td style="padding:10px 12px;border-bottom:1px solid #E2E8F0;"><span style="display:inline-block;padding:2px 7px;border-radius:4px;font-size:11px;font-weight:600;${sevColor}">${escapeHtml(v.severity)}</span></td>
+                  <td style="padding:10px 12px;border-bottom:1px solid #E2E8F0;font-family:monospace;font-size:12px;font-weight:600;">${escapeHtml(v.phrase)}<div style="font-family:sans-serif;font-weight:400;font-size:11px;color:#475569;margin-top:2px;">${escapeHtml(v.category)}</div></td>
+                  <td style="padding:10px 12px;border-bottom:1px solid #E2E8F0;font-size:12px;color:#334155;line-height:1.5;">${escapeHtml(v.reason)}</td>
+                </tr>`;
+            })
+            .join('');
+
+    const html = `<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <title>BrandGuard AI — Compliance Audit Report</title>
+  <style>
+    * { box-sizing: border-box; }
+    body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; color: #0F172A; background: #FFFFFF; margin: 0; padding: 36px; }
+    .header { display: flex; justify-content: space-between; align-items: flex-start; border-bottom: 2px solid #0F766E; padding-bottom: 16px; margin-bottom: 24px; }
+    .brand { font-size: 20px; font-weight: 700; letter-spacing: -0.02em; }
+    .brand span { color: #0F766E; }
+    .meta { font-size: 12px; color: #475569; text-align: right; line-height: 1.6; }
+    .scores { display: grid; grid-template-columns: repeat(3, 1fr); gap: 14px; margin-bottom: 24px; }
+    .score-box { border: 1px solid #E2E8F0; border-radius: 8px; padding: 14px 16px; background: #F8F9FA; }
+    .score-label { font-size: 11px; text-transform: uppercase; letter-spacing: 0.05em; color: #475569; font-weight: 600; }
+    .score-val { font-size: 28px; font-weight: 700; font-family: monospace; margin-top: 4px; color: #0F172A; }
+    .summary { background: #F8F9FA; border-left: 3px solid #0F766E; padding: 12px 16px; font-size: 13px; color: #334155; line-height: 1.6; margin-bottom: 24px; }
+    h2 { font-size: 13px; text-transform: uppercase; letter-spacing: 0.06em; color: #0F172A; margin: 24px 0 10px; }
+    table { width: 100%; border-collapse: collapse; border: 1px solid #E2E8F0; border-radius: 8px; overflow: hidden; }
+    th { text-align: left; background: #F8F9FA; padding: 10px 12px; font-size: 11px; text-transform: uppercase; letter-spacing: 0.05em; color: #475569; border-bottom: 1px solid #E2E8F0; }
+    .rewrite { background: #F8F9FA; border: 1px solid #E2E8F0; border-radius: 8px; padding: 16px; font-size: 13px; line-height: 1.65; white-space: pre-wrap; color: #0F172A; }
+    @media print { body { padding: 18px; } .score-box, .summary, .rewrite, th { -webkit-print-color-adjust: exact; print-color-adjust: exact; } }
+  </style>
+</head>
+<body>
+  <div class="header">
+    <div>
+      <div class="brand">BrandGuard <span>AI</span></div>
+      <div style="font-size:12px;color:#475569;margin-top:4px;">Executive Compliance Audit Report &middot; <strong>${escapeHtml(status.label)}</strong></div>
+    </div>
+    <div class="meta">
+      <div><strong>Profile:</strong> ${escapeHtml(currentAudit.guidelinesSnapshot.presetLabel)}</div>
+      <div><strong>Source:</strong> ${escapeHtml(sourceLabel)}</div>
+      <div><strong>Audited:</strong> ${escapeHtml(currentAudit.fullDate || currentAudit.timestamp)}</div>
+      <div><strong>Engine:</strong> ${currentAudit.engine === 'gemini' ? 'Gemini Flash Live' : 'Local Rule Engine'}</div>
+    </div>
+  </div>
+
+  <div class="scores">
+    <div class="score-box"><div class="score-label">Overall Compliance</div><div class="score-val">${currentAudit.overallScore} / 100</div></div>
+    <div class="score-box"><div class="score-label">Tone Alignment</div><div class="score-val">${currentAudit.toneScore}%</div></div>
+    <div class="score-box"><div class="score-label">Legal Safety</div><div class="score-val">${currentAudit.legalScore}%</div></div>
+  </div>
+
+  <div class="summary">${escapeHtml(currentAudit.summary)}</div>
+
+  <h2>Flagged Violations (${currentAudit.violations.length})</h2>
+  <table>
+    <thead>
+      <tr>
+        <th style="width:40px;">#</th>
+        <th style="width:90px;">Severity</th>
+        <th style="width:220px;">Phrase &amp; Category</th>
+        <th>Compliance Guidance</th>
+      </tr>
+    </thead>
+    <tbody>${violationsRows}</tbody>
+  </table>
+
+  <h2>Compliant Rewrite</h2>
+  <div class="rewrite">${escapeHtml(currentAudit.compliantRewrite)}</div>
+</body>
+</html>`;
+
+    const printWindow = window.open('', '_blank', 'width=920,height=800');
+    if (!printWindow) {
+      triggerToast('Pop-up blocked. Allow pop-ups to print or save as PDF.');
+      return;
+    }
+    printWindow.document.open();
+    printWindow.document.write(html);
+    printWindow.document.close();
+    printWindow.focus();
+    setTimeout(() => {
+      printWindow.print();
+    }, 250);
   };
 
   const highlightedSegments = useMemo(() => {
@@ -940,6 +1154,77 @@ ${currentAudit.compliantRewrite}
                     className="w-full p-4 rounded-lg bg-[#F8F9FA] border border-[#E2E8F0] focus:bg-white focus:border-[#0F766E] focus:outline-none text-[15px] leading-relaxed text-[#0F172A] placeholder:text-[#94A3B8] resize-y transition-colors"
                   />
 
+                  {/* PDF Upload Dropzone / Attached File Pill */}
+                  <div>
+                    <input
+                      ref={fileInputRef}
+                      type="file"
+                      accept=".pdf,application/pdf"
+                      onChange={(e) => handlePdfFile(e.target.files?.[0])}
+                      className="hidden"
+                    />
+
+                    {pdfAttachment ? (
+                      <div className="flex items-center justify-between gap-3 px-3.5 py-2.5 rounded-lg bg-[#F0FDF4]/60 border border-[#BBF7D0]">
+                        <div className="flex items-center gap-2.5 min-w-0">
+                          <div className="w-8 h-8 rounded-md bg-white border border-[#BBF7D0] flex items-center justify-center text-[#0F766E] shrink-0">
+                            <Paperclip className="w-4 h-4" />
+                          </div>
+                          <div className="min-w-0">
+                            <p className="text-xs font-semibold text-[#0F172A] truncate">
+                              {pdfAttachment.name}
+                            </p>
+                            <p className="text-[11px] font-mono text-[#475569]">
+                              PDF &middot; {formatFileSize(pdfAttachment.size)} &middot; Ready for Gemini native audit
+                            </p>
+                          </div>
+                        </div>
+                        <button
+                          type="button"
+                          onClick={handleRemovePdf}
+                          className="p-1.5 rounded-md text-[#475569] hover:text-[#991B1B] hover:bg-white transition-colors shrink-0"
+                          title="Remove attached PDF"
+                        >
+                          <X className="w-4 h-4" />
+                        </button>
+                      </div>
+                    ) : (
+                      <div
+                        onDragOver={(e) => {
+                          e.preventDefault();
+                          setIsDraggingPdf(true);
+                        }}
+                        onDragLeave={() => setIsDraggingPdf(false)}
+                        onDrop={(e) => {
+                          e.preventDefault();
+                          setIsDraggingPdf(false);
+                          handlePdfFile(e.dataTransfer.files?.[0]);
+                        }}
+                        onClick={() => fileInputRef.current?.click()}
+                        className={`flex flex-wrap items-center justify-between gap-3 px-4 py-3 rounded-lg border border-dashed cursor-pointer transition-colors ${
+                          isDraggingPdf
+                            ? 'bg-[#F0FDFA] border-[#0F766E]'
+                            : 'bg-[#F8F9FA]/70 border-[#CBD5E1] hover:border-[#0F766E] hover:bg-[#F8F9FA]'
+                        }`}
+                      >
+                        <div className="flex items-center gap-2.5">
+                          <Upload className="w-4 h-4 text-[#0F766E] shrink-0" />
+                          <div>
+                            <p className="text-xs font-medium text-[#0F172A]">
+                              Attach a PDF document to audit
+                            </p>
+                            <p className="text-[11px] text-[#475569]">
+                              Drag &amp; drop or click to upload (.pdf up to 20 MB)
+                            </p>
+                          </div>
+                        </div>
+                        <span className="px-2.5 py-1 rounded-md text-xs font-medium bg-white border border-[#E2E8F0] text-[#0F172A]">
+                          Browse PDF
+                        </span>
+                      </div>
+                    )}
+                  </div>
+
                   <div className="flex flex-wrap items-center justify-between gap-3">
                     <div className="flex items-center gap-3 text-xs font-mono text-[#475569]">
                       <span>{wordCount} words</span>
@@ -949,7 +1234,7 @@ ${currentAudit.compliantRewrite}
 
                     <button
                       onClick={handleRunAudit}
-                      disabled={isAuditing || !draftCopy.trim()}
+                      disabled={isAuditing || (!draftCopy.trim() && !pdfAttachment)}
                       className="inline-flex items-center gap-2 px-5 py-2.5 rounded-lg text-sm font-medium bg-[#1E293B] hover:bg-[#0F172A] disabled:opacity-45 text-white transition-colors cursor-pointer"
                     >
                       {isAuditing ? (
@@ -1105,6 +1390,24 @@ ${currentAudit.compliantRewrite}
                           </div>
                         </div>
                       ))}
+                    </div>
+
+                    {/* Export Actions (PDF + Markdown) */}
+                    <div className="flex flex-wrap items-center gap-2 pt-3 border-t border-[#E2E8F0]">
+                      <button
+                        onClick={handleExportPdf}
+                        className="flex-1 inline-flex items-center justify-center gap-1.5 px-3 py-2 rounded-lg text-xs font-medium bg-[#1E293B] hover:bg-[#0F172A] text-white transition-colors cursor-pointer"
+                      >
+                        <Printer className="w-3.5 h-3.5 text-teal-400" />
+                        <span>Export PDF Report</span>
+                      </button>
+                      <button
+                        onClick={handleExportMarkdown}
+                        className="inline-flex items-center justify-center gap-1.5 px-3 py-2 rounded-lg text-xs font-medium bg-white hover:bg-[#F8F9FA] border border-[#E2E8F0] text-[#0F172A] transition-colors cursor-pointer"
+                      >
+                        <Download className="w-3.5 h-3.5 text-[#475569]" />
+                        <span>Export .md</span>
+                      </button>
                     </div>
                   </>
                 )}
