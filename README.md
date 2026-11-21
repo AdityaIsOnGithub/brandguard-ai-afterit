@@ -1,16 +1,38 @@
-# React + Vite
+# 🛡️ BrandGuard AI
 
-This template provides a minimal setup to get React working in Vite with HMR and some ESLint rules.
+An enterprise brand compliance and copywriting workbench built with **React 18**, **Vite**, **Tailwind CSS**, and the **Google Gemini Flash API**. BrandGuard AI audits marketing copy and PDF documents against customizable brand guidelines, flags tone and legal risks inline, and generates one-click compliant rewrites.
 
-Currently, two official plugins are available:
+🔗 **Live Demo:** [https://brandguard-ai-afterit.vercel.app/](https://brandguard-ai-afterit.vercel.app/)
 
-- [@vitejs/plugin-react](https://github.com/vitejs/vite-plugin-react/blob/main/packages/plugin-react) uses [Oxc](https://oxc.rs)
-- [@vitejs/plugin-react-swc](https://github.com/vitejs/vite-plugin-react/blob/main/packages/plugin-react-swc) uses [SWC](https://swc.rs/)
+---
 
-## React Compiler
+## ✨ Features
 
-The React Compiler is not enabled on this template because of its impact on dev & build performances. To add it, see [this documentation](https://react.dev/learn/react-compiler/installation).
+- **3-Pane Enterprise Workbench:** Clean, light editorial interface uniting brand policy configuration, document editing, and real-time compliance diagnostics.
+- **Native PDF Document Auditing:** Upload `.pdf` brochures, pitch decks, or press releases (up to 20 MB) for direct multimodal compliance analysis via Gemini Flash.
+- **Industry Presets & Custom Rules:** Switch between **FinTech**, **Health & Wellness**, and **B2B Enterprise SaaS** profiles, or customize banned phrases, required disclaimers, and target brand voice on the fly.
+- **Inline Violation Highlighting & Scoring:** Displays Compliance Score, Tone Alignment, and Legal Safety meters alongside clickable inline highlights linked to severity-tagged violation cards.
+- **One-Click Compliant Rewrites & History:** Generate policy-safe rewrites, swap them directly into the editor, and compare before/after scores in the Audit History strip.
+- **Exportable Compliance Reports:** Export results as a print-ready **PDF Compliance Report** or a **Markdown (`.md`)** summary.
+- **Dual-Engine Reliability:** Runs on **Gemini Flash Live** with automatic fallback to a built-in **Local Rule Engine** for zero-downtime auditing.
 
-## Expanding the ESLint configuration
+---
 
-If you are developing a production application, we recommend using TypeScript with type-aware lint rules enabled. Check out the [TS template](https://github.com/vitejs/vite/tree/main/packages/create-vite/template-react-ts) for information on how to integrate TypeScript and [`typescript-eslint`](https://typescript-eslint.io) in your project.
+## 🛠️ Tech Stack
+
+- **Frontend:** React 18, Vite, Tailwind CSS, Lucide React
+- **AI Engine:** Google Gemini Flash API (`@google/genai`) with structured JSON output
+- **Deployment:** Vercel
+
+---
+
+## 🚀 Getting Started
+
+### Prerequisites
+- [Node.js](https://nodejs.org/) (v18+ recommended)
+- A [Google AI Studio](https://aistudio.google.com/) Gemini API key
+
+### 1. Clone the Repository
+```bash
+git clone [https://github.com/AdityaIsOnGithub/brandguard-ai-afterit.git](https://github.com/AdityaIsOnGithub/brandguard-ai-afterit.git)
+cd brandguard-ai-afterit
